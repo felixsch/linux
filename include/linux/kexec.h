@@ -307,6 +307,16 @@ int crash_shrink_memory(unsigned long new_size);
 size_t crash_get_memory_size(void);
 void crash_free_reserved_phys_range(unsigned long begin, unsigned long end);
 
+#ifdef CONFIG_KEXEC_USE_CMA
+
+extern struct cma *crashk_cma;
+
+void crash_cma_init_reserved_mem(phys_addr_t base, phys_addr_t size,
+				 int order_per_bit, struct cma **res_cma);
+
+int crash_contiguous_request(unsigned long size);
+#endif /* CONFIG_KEXEC_USE_CMA */
+
 #else /* !CONFIG_KEXEC */
 struct pt_regs;
 struct task_struct;

@@ -98,6 +98,7 @@ static ssize_t kexec_loaded_show(struct kobject *kobj,
 }
 KERNEL_ATTR_RO(kexec_loaded);
 
+
 static ssize_t kexec_crash_loaded_show(struct kobject *kobj,
 				       struct kobj_attribute *attr, char *buf)
 {
@@ -120,7 +121,11 @@ static ssize_t kexec_crash_size_store(struct kobject *kobj,
 	if (kstrtoul(buf, 0, &cnt))
 		return -EINVAL;
 
+#ifdef CONFIG_KEXEC_USE_CMA
+	ret = crash_contiguous_request(cnt);
+#else
 	ret = crash_shrink_memory(cnt);
+#endif
 	return ret < 0 ? ret : count;
 }
 KERNEL_ATTR_RW(kexec_crash_size);

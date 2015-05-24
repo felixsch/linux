@@ -623,7 +623,14 @@ static void __init reserve_crashkernel(void)
 
 	crashk_res.start = crash_base;
 	crashk_res.end   = crash_base + crash_size - 1;
+
+#ifdef CONFIG_KEXEC_USE_CMA
+	crash_cma_init_reserved_mem((phys_addr_t)crash_base,
+				    (phys_addr_t)crash_size,
+				    0, &crashk_cma);
+#else
 	insert_resource(&iomem_resource, &crashk_res);
+#endif
 
 	if (crash_base >= (1ULL<<32))
 		reserve_crashkernel_low();

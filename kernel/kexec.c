@@ -5,7 +5,7 @@
  * This source code is licensed under the GNU General Public License,
  * Version 2.  See the file COPYING for more details.
  */
-
+#define DEBUG
 #define pr_fmt(fmt)	"kexec: " fmt
 
 #include <linux/capability.h>
@@ -45,6 +45,11 @@
 #include <crypto/hash.h>
 #include <crypto/sha.h>
 
+#ifdef CONFIG_KEXEC_USE_CMA
+  #include <linux/cma.h>
+#endif
+
+
 /* Per cpu memory for storing cpu states in case of system crash. */
 note_buf_t __percpu *crash_notes;
 
@@ -81,6 +86,10 @@ struct resource crashk_low_res = {
 	.end   = 0,
 	.flags = IORESOURCE_BUSY | IORESOURCE_MEM
 };
+
+#ifdef CONFIG_KEXEC_USE_CMA
+struct cma *crashk_cma;
+#endif
 
 int kexec_should_crash(struct task_struct *p)
 {
@@ -1487,7 +1496,7 @@ size_t crash_get_memory_size(void)
 {
 	size_t size = 0;
 	mutex_lock(&kexec_mutex);
-	if (crashk_res.end != crashk_res.start)
+	if (crashk_res.parent && crashk_res.end != crashk_res.start)
 		size = resource_size(&crashk_res);
 	mutex_unlock(&kexec_mutex);
 	return size;
@@ -1552,6 +1561,65 @@ unlock:
 	mutex_unlock(&kexec_mutex);
 	return ret;
 }
+
+#ifdef CONFIG_KEXEC_USE_CMA
+
+void __init crash_cma_init_reserved_mem(phys_addr_t base, phys_addr_t size,
+					int order_per_bit, struct cma **res_cma)
+{
+	int ret;
+
+	pr_debug("Enable CMA support");
+	ret = cma_init_reserved_mem(base, size, order_per_bit, res_cma);
+
+	// maybe call arch specific code here?
+
+}
+
+
+int crash_contiguous_request(unsigned long size) {
+
+	int ret = 0;
+	unsigned int num_pages = (size % KEXEC_CRASH_MEM_ALIGN) + 1;
+
+	struct page *pages = NULL;
+	phys_addr_t base = 0;
+
+	if (kexec_crash_image) {
+		return -ENOENT;
+	}
+
+	// Could not reserve memory
+	if (!crashk_cma) {
+		return -ENOMEM;
+	}
+
+	if (crashk_res.parent) {
+		return crash_shrink_memory(size);
+	}
+
+	pr_debug("Allocating memory from CMA");
+
+	mutex_lock(&kexec_mutex);
+
+	pages = cma_alloc(crashk_cma, num_pages, KEXEC_CRASH_MEM_ALIGN);
+
+	if (!pages) {
+		ret = -ENOMEM;
+		goto unlock;
+	}
+
+	base = page_to_pfn(pages) << PAGE_SHIFT;
+
+	crashk_res.start = base;
+	crashk_res.end   = base + (phys_addr_t)size;
+
+	insert_resource(&iomem_resource, &crashk_res);
+unlock:
+	mutex_unlock(&kexec_mutex);
+	return ret;
+}
+#endif
 
 static u32 *append_elf_note(u32 *buf, char *name, unsigned type, void *data,
 			    size_t data_len)

@@ -1707,6 +1707,16 @@ config KEXEC_FILE
 	  for kernel and initramfs as opposed to list of segments as
 	  accepted by previous system call.
 
+config KEXEC_USE_CMA
+       bool "Reserve kexec kernel space via CMA"
+       select CMA
+       depends on KEXEC
+       depends on X86 || X86_64
+       ---help---
+        Instead of hard reserving crashkernel memory use CMA (Contiguous
+        Allocator) to make the reserved memory available to moveable pages.
+
+
 config KEXEC_VERIFY_SIG
 	bool "Verify kernel signature during kexec_file_load() syscall"
 	depends on KEXEC_FILE
